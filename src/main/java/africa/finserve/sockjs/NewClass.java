@@ -28,108 +28,117 @@ import java.util.Set;
  */
 public class NewClass extends AbstractVerticle {
 
-    private EventBus bus;
+   private EventBus bus;
+   private BridgeOptions options;
 
-    @Override
-    public void start() {
+   @Override
+   public void start() {
 
-        Router router = Router.router(vertx);
+      Router router = Router.router(vertx);
 
-        Set<String> allowedHeaders = new HashSet<>();
-        allowedHeaders.add("Access-Control-Allow-Origin");
+      Set<String> allowedHeaders = new HashSet<>();
+      allowedHeaders.add("Access-Control-Allow-Origin");
 
-        Set<HttpMethod> allowedMethods = new HashSet<>();
-        allowedMethods.add(HttpMethod.GET);
-        allowedMethods.add(HttpMethod.POST);
-        allowedMethods.add(HttpMethod.DELETE);
+      Set<HttpMethod> allowedMethods = new HashSet<>();
+      allowedMethods.add(HttpMethod.GET);
+      allowedMethods.add(HttpMethod.POST);
+      allowedMethods.add(HttpMethod.DELETE);
 
-        router.route().handler(io.vertx.ext.web.handler.CorsHandler.create("*")
-                .allowedHeaders(allowedHeaders)
-                .allowedMethods(allowedMethods));
-        router.route("/eventbus/*").handler(eventBusHandler());
-        router.route().handler(BodyHandler.create());
-        router.route().handler(staticHandler());
+      router.route().handler(io.vertx.ext.web.handler.CorsHandler.create("*")
+            .allowedHeaders(allowedHeaders)
+            .allowedMethods(allowedMethods));
+      router.route("/eventbus/*").handler(eventBusHandler());
+      router.route().handler(BodyHandler.create());
+      router.route().handler(staticHandler());
 
-        router.route().failureHandler(errorHandler());
+      router.route().failureHandler(errorHandler());
 
-        vertx.createHttpServer().requestHandler(router::accept).listen(9999);
-        bus = vertx.eventBus();
-        MessageConsumer<JsonObject> p = bus.consumer("in",
-                h -> {
-                    JsonObject jo = h.body();
-                    System.out.println(h);
-                    bus.publish("out", jo);
-                });
-        
-        MessageConsumer<JsonObject> pl = bus.consumer("in2",
-                h -> {
-                    JsonObject jo = h.body();
-                    jo.put("oga", Boolean.FALSE);
-                    System.out.println(h);
-                    bus.publish("out2", jo);
-                });
+      vertx.createHttpServer().requestHandler(router::accept).listen(9999);
+      bus = vertx.eventBus();
+      MessageConsumer<JsonObject> p = bus.consumer("mobilein",
+            h -> {
+               System.out.println(h.body());
 
+               //bus.publish("mobileout", jo);
+               JsonObject reply = new JsonObject();
+               reply.put("replay", "You guy my guy received");
+               h.reply(reply);
+            });
 
-    }
+      MessageConsumer<JsonObject> pl = bus.consumer("webin",
+            h -> {
+               JsonObject jo = h.body();
 
-    private SockJSHandler eventBusHandler() {
-        BridgeOptions options = new BridgeOptions()
-                .addOutboundPermitted(new PermittedOptions().setAddress("out"))
-                .addOutboundPermitted(new PermittedOptions().setAddress("out2"))
-                .addInboundPermitted(new PermittedOptions().setAddress("in"))
-                .addInboundPermitted(new PermittedOptions().setAddress("in2"));
-        return SockJSHandler.create(vertx).bridge(options, event -> {
-            if (event.type() == BridgeEventType.SOCKET_CREATED) {
-                System.out.println("Created");
+               System.out.println(h);
+               bus.publish("webout", jo);
+            });
 
-            } else if (event.type() == BridgeEventType.RECEIVE) {
-                System.out.println(event.getRawMessage());
+   }
 
-            } else if (event.type() == BridgeEventType.SEND || event.type() == BridgeEventType.PUBLISH) {
-                System.out.println(event.type());
-                JsonObject rawMessage = event.getRawMessage();
-                rawMessage.put("address_", "one");
-
+   private SockJSHandler eventBusHandler() {
+      options = new BridgeOptions()
+            .addOutboundPermitted(new PermittedOptions().setAddress("webout"))
+            .addOutboundPermitted(new PermittedOptions().setAddress("mobileout"))
+            .addInboundPermitted(new PermittedOptions().setAddress("webin"))
+            .addInboundPermitted(new PermittedOptions().setAddress("mobilein"));
+      return SockJSHandler.create(vertx).bridge(options, event -> {
+         if (null != event.type()) {
+            switch (event.type()) {
+               case SOCKET_CREATED:
+                  System.out.println("Created");
+                  break;
+               case RECEIVE:
+                  System.out.println(event.getRawMessage());
+                  break;
+               case SEND:
+               case PUBLISH:
+                  System.out.println(event.type());
+                  JsonObject rawMessage = event.getRawMessage();
+                  System.out.println(rawMessage.encodePrettily());
+                  break;
+               default:
+                  break;
             }
-            System.out.println(event.type());
-            event.complete(true);
+         }
 
-        }
-        );
-    }
+         event.complete(true);
 
-    private Router
-            auctionApiRouter() {
+      }
+      );
+   }
 
-        Router router
-                = Router
-                        .router(vertx
-                        );
-        router
-                .route().handler(BodyHandler
-                        .create());
+   private Router
+         auctionApiRouter() {
 
-        router
-                .route().consumes("application/json");
-        router
-                .route().produces("application/json");
+      Router router
+            = Router
+                  .router(vertx
+                  );
+      router
+            .route().handler(BodyHandler
+                  .create());
 
-        return router;
+      router
+            .route().consumes("application/json");
+      router
+            .route().produces("application/json");
 
-    }
+      return router;
 
-    private ErrorHandler
-            errorHandler() {
-        return ErrorHandler
-                .create(true);
+   }
 
-    }
+   private ErrorHandler
+         errorHandler() {
+      return ErrorHandler
+            .create(true);
 
-    private StaticHandler
-            staticHandler() {
-        return StaticHandler
-                .create()
-                .setCachingEnabled(false);
-    }
+   }
+
+   private StaticHandler
+         staticHandler() {
+      return StaticHandler
+            .create()
+            .setCachingEnabled(false);
+   }
 
 }
