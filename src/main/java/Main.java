@@ -1,5 +1,5 @@
 
-import africa.finserve.sockjs.NewClass;
+import testing.vertx.sockjs.NewClass;
 import io.vertx.core.Vertx;
 
 /*
